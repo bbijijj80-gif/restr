@@ -87,20 +87,37 @@ class RegistryManager:
         try:
             key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, self.key_path, 0, winreg.KEY_READ)
             
-            for i in range(len(REG_VALUE_NAMES)):
+            # Читаем каждое значение по имени
+            for name in REG_VALUE_NAMES:
                 try:
-                    name, value, type_ = winreg.EnumValue(key, i)
-                    self.values[name] = value
+                    value, type_ = winreg.QueryValueEx(key, name)
+                    # Преобразуем значение в нужный тип
+                    if name == "BestScore":
+                        self.values[name] = int(value) if value else 0
+                    elif name in ["AccuracyPercent"]:
+                        self.values[name] = float(value) if value else 100.0
+                    elif name in ["LastPlayedDate", "PlayerName"]:
+                        self.values[name] = str(value) if value else ""
+                    else:
+                        self.values[name] = int(value) if value else 0
                 except OSError:
-                    break
+                    # Значение не найдено, будет инициализировано позже
+                    pass
+                except Exception as e:
+                    print(f"Ошибка чтения значения {name}: {e}")
+                    pass
             
             winreg.CloseKey(key)
             
             # Инициализация отсутствующих значений
             self._initialize_missing_values()
             
+            # Отладка: выводим загруженные значения
+            print(f"Загружено BestScore из реестра: {self.values.get('BestScore', 'не найдено')}")
+            
         except FileNotFoundError:
             # Ключ не существует, создаём его
+            print("Ключ реестра не найден, создаём новый")
             self._create_registry_key()
             self._initialize_missing_values()
         except Exception as e:
@@ -119,32 +136,47 @@ class RegistryManager:
     
     def _initialize_missing_values(self):
         """Инициализация отсутствующих значений по умолчанию"""
-        defaults = {
-            "BestScore": self.values.get("BestScore", 0),
-            "TotalGamesPlayed": self.values.get("TotalGamesPlayed", 0),
-            "TotalEnemiesDestroyed": self.values.get("TotalEnemiesDestroyed", 0),
-            "TotalShotsFired": self.values.get("TotalShotsFired", 0),
-            "PlayTimeSeconds": self.values.get("PlayTimeSeconds", 0),
-            "MaxLevelReached": self.values.get("MaxLevelReached", 1),
-            "PowerUpsCollected": self.values.get("PowerUpsCollected", 0),
-            "DamageTaken": self.values.get("DamageTaken", 0),
-            "BossesDefeated": self.values.get("BossesDefeated", 0),
-            "ComboMax": self.values.get("ComboMax", 0),
-            "AccuracyPercent": self.values.get("AccuracyPercent", 100.0),
-            "LivesRemaining": self.values.get("LivesRemaining", 3),
-            "BonusPoints": self.values.get("BonusPoints", 0),
-            "SecretFound": self.values.get("SecretFound", 0),
-            "AchievementsUnlocked": self.values.get("AchievementsUnlocked", 0),
-            "LastPlayedDate": self.values.get("LastPlayedDate", ""),
-            "PlayerName": self.values.get("PlayerName", "Player"),
-            "DifficultyLevel": self.values.get("DifficultyLevel", 1),
-            "SoundEnabled": self.values.get("SoundEnabled", 1),
-            "GraphicsQuality": self.values.get("GraphicsQuality", 1)
-        }
-        
-        for key, value in defaults.items():
-            if key not in self.values:
-                self.values[key] = value
+        # Инициализируем только те значения, которых ещё нет в self.values
+        if "BestScore" not in self.values:
+            self.values["BestScore"] = 0
+        if "TotalGamesPlayed" not in self.values:
+            self.values["TotalGamesPlayed"] = 0
+        if "TotalEnemiesDestroyed" not in self.values:
+            self.values["TotalEnemiesDestroyed"] = 0
+        if "TotalShotsFired" not in self.values:
+            self.values["TotalShotsFired"] = 0
+        if "PlayTimeSeconds" not in self.values:
+            self.values["PlayTimeSeconds"] = 0
+        if "MaxLevelReached" not in self.values:
+            self.values["MaxLevelReached"] = 1
+        if "PowerUpsCollected" not in self.values:
+            self.values["PowerUpsCollected"] = 0
+        if "DamageTaken" not in self.values:
+            self.values["DamageTaken"] = 0
+        if "BossesDefeated" not in self.values:
+            self.values["BossesDefeated"] = 0
+        if "ComboMax" not in self.values:
+            self.values["ComboMax"] = 0
+        if "AccuracyPercent" not in self.values:
+            self.values["AccuracyPercent"] = 100.0
+        if "LivesRemaining" not in self.values:
+            self.values["LivesRemaining"] = 3
+        if "BonusPoints" not in self.values:
+            self.values["BonusPoints"] = 0
+        if "SecretFound" not in self.values:
+            self.values["SecretFound"] = 0
+        if "AchievementsUnlocked" not in self.values:
+            self.values["AchievementsUnlocked"] = 0
+        if "LastPlayedDate" not in self.values:
+            self.values["LastPlayedDate"] = ""
+        if "PlayerName" not in self.values:
+            self.values["PlayerName"] = "Player"
+        if "DifficultyLevel" not in self.values:
+            self.values["DifficultyLevel"] = 1
+        if "SoundEnabled" not in self.values:
+            self.values["SoundEnabled"] = 1
+        if "GraphicsQuality" not in self.values:
+            self.values["GraphicsQuality"] = 1
     
     def save_to_registry(self):
         """Сохранение всех 20 значений в реестр"""
@@ -152,17 +184,24 @@ class RegistryManager:
             return
             
         try:
+            # Сначала создаём ключ если его нет
+            self._create_registry_key()
+            
             key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, self.key_path, 0, winreg.KEY_WRITE)
             
             for name, value in self.values.items():
-                if isinstance(value, int):
-                    winreg.SetValueEx(key, name, 0, winreg.REG_DWORD, value)
-                elif isinstance(value, float):
-                    winreg.SetValueEx(key, name, 0, winreg.REG_DWORD, int(value))
-                elif isinstance(value, str):
-                    winreg.SetValueEx(key, name, 0, winreg.REG_SZ, value)
+                try:
+                    if isinstance(value, int):
+                        winreg.SetValueEx(key, name, 0, winreg.REG_DWORD, value)
+                    elif isinstance(value, float):
+                        winreg.SetValueEx(key, name, 0, winreg.REG_DWORD, int(value))
+                    elif isinstance(value, str):
+                        winreg.SetValueEx(key, name, 0, winreg.REG_SZ, value)
+                except Exception as e:
+                    print(f"Ошибка сохранения значения {name}: {e}")
             
             winreg.CloseKey(key)
+            print("Значения успешно сохранены в реестр")
         except Exception as e:
             print(f"Ошибка сохранения в реестр: {e}")
     
@@ -487,8 +526,11 @@ class Game:
     def handle_game_over(self):
         """Обработка конца игры"""
         best_score = self.registry.get_value("BestScore")
+        print(f"Текущий счёт: {self.score}, Лучший счёт из реестра: {best_score}")
+        
         if self.score > best_score:
             self.registry.set_value("BestScore", self.score)
+            print(f"Новый лучший счёт: {self.score}")
         
         self.registry.set_value("BonusPoints", self.score // 10)
         self.registry.save_to_registry()
