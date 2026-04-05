@@ -1,6 +1,6 @@
 """
 Космический шутер - Версия для Windows
-Игра с сохранением 20 значений в реестре Windows (HKCU\Software\SpaceShooter)
+Игра с сохранением 20 значений в реестре Windows
 Включая лучший счёт, который сохраняется между запусками
 """
 
@@ -9,12 +9,13 @@ import random
 import math
 import os
 import sys
-import winsound
-from ctypes import winreg, c_wchar_p, byref, create_unicode_buffer, sizeof
 
 # Инициализация Pygame
 pygame.init()
-pygame.mixer.init()
+try:
+    pygame.mixer.init()
+except Exception:
+    pass  # Звук может быть недоступен в некоторых средах
 
 # Константы экрана
 WIDTH, HEIGHT = 1024, 768
@@ -34,7 +35,7 @@ CYAN = (0, 255, 255)
 ORANGE = (255, 165, 0)
 
 # Реестр ключ
-REG_KEY_PATH = r"Software\SpaceShooter"
+REG_KEY_PATH = "Software\\SpaceShooter"
 REG_VALUE_NAMES = [
     "BestScore",
     "TotalGamesPlayed",
@@ -58,6 +59,17 @@ REG_VALUE_NAMES = [
     "GraphicsQuality"
 ]
 
+# Проверка платформы и импорт модулей Windows
+IS_WINDOWS = sys.platform == 'win32'
+if IS_WINDOWS:
+    import winsound
+    import winreg
+else:
+    # Заглушки для не-Windows платформ (для тестирования)
+    winsound = None
+    winreg = None
+
+
 class RegistryManager:
     """Менеджер для работы с реестром Windows"""
     
@@ -68,6 +80,10 @@ class RegistryManager:
     
     def load_from_registry(self):
         """Загрузка всех 20 значений из реестра"""
+        if not IS_WINDOWS or winreg is None:
+            self._initialize_missing_values()
+            return
+            
         try:
             key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, self.key_path, 0, winreg.KEY_READ)
             
@@ -87,9 +103,14 @@ class RegistryManager:
             # Ключ не существует, создаём его
             self._create_registry_key()
             self._initialize_missing_values()
+        except Exception as e:
+            print(f"Ошибка загрузки из реестра: {e}")
+            self._initialize_missing_values()
     
     def _create_registry_key(self):
         """Создание ключа реестра"""
+        if not IS_WINDOWS or winreg is None:
+            return
         try:
             key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, self.key_path)
             winreg.CloseKey(key)
@@ -127,6 +148,9 @@ class RegistryManager:
     
     def save_to_registry(self):
         """Сохранение всех 20 значений в реестр"""
+        if not IS_WINDOWS or winreg is None:
+            return
+            
         try:
             key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, self.key_path, 0, winreg.KEY_WRITE)
             
@@ -370,11 +394,12 @@ class Game:
     
     def play_sound(self, frequency, duration, volume=10000):
         """Воспроизведение звука"""
-        if self.sound_enabled:
-            try:
-                winsound.Beep(frequency, duration)
-            except:
-                pass
+        if not self.sound_enabled or winsound is None:
+            return
+        try:
+            winsound.Beep(frequency, duration)
+        except:
+            pass
     
     def handle_events(self):
         for event in pygame.event.get():

@@ -14,7 +14,10 @@ from pathlib import Path
 
 # Инициализация Pygame
 pygame.init()
-pygame.mixer.init()
+try:
+    pygame.mixer.init()
+except Exception:
+    pass  # Звук может быть недоступен в некоторых средах
 
 # Константы экрана
 WIDTH, HEIGHT = 1024, 768
